@@ -14,7 +14,12 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "api/$1.py"
+      "dest": "api/$1.py",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type"
+      }
     },
     {
       "src": "/(.*)",
@@ -23,5 +28,10 @@
   ],
   "env": {
     "PYTHONUNBUFFERED": "1"
+  },
+  "functions": {
+    "api/**/*.py": {
+      "maxDuration": 30
+    }
   }
 } 
