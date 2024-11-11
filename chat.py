@@ -18,26 +18,13 @@ def handle_cors_headers():
         "Content-Type": "application/json"
     }
 
-def handler(event, context):
-    # 处理 OPTIONS 请求
-    if event.get('httpMethod') == 'OPTIONS':
-        return {
-            "statusCode": 200,
-            "headers": handle_cors_headers(),
-            "body": ""
-        }
-
-    # 只接受 POST 请求
-    if event.get('httpMethod') != 'POST':
-        return {
-            "statusCode": 405,
-            "headers": handle_cors_headers(),
-            "body": json.dumps({"error": "Method Not Allowed"})
-        }
-
+def handle(request):
+    """
+    Vercel serverless function handler
+    """
     try:
         # 解析请求体
-        body = json.loads(event.get('body', '{}'))
+        body = json.loads(request.get('body', '{}'))
         query = body.get('message')
         history = body.get('history', [])
 
@@ -83,3 +70,23 @@ def handler(event, context):
             "headers": handle_cors_headers(),
             "body": json.dumps({"error": str(e)})
         }
+
+def handler(request, context):
+    """
+    Main handler function for Vercel
+    """
+    if request.get('method', '').upper() == 'OPTIONS':
+        return {
+            "statusCode": 200,
+            "headers": handle_cors_headers(),
+            "body": ""
+        }
+    
+    if request.get('method', '').upper() != 'POST':
+        return {
+            "statusCode": 405,
+            "headers": handle_cors_headers(),
+            "body": json.dumps({"error": "Method Not Allowed"})
+        }
+
+    return handle(request)
