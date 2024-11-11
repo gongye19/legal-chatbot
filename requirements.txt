@@ -52,3 +52,4 @@ urllib3==2.2.0
 wcwidth==0.2.13
 Werkzeug==3.0.4
 zhipuai==1.0.7
+dataclasses==0.8; python_version < "3.7"
