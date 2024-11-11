@@ -13,15 +13,7 @@ def init_client():
             print("Error: ZHIPUAI_API_KEY environment variable is not set")
             return None
         client = ZhipuAI(api_key=ZHIPUAI_API_KEY)
-        # 测试客户端是否正常工作
-        test_response = client.chat.completions.create(
-            model="glm-4",
-            messages=[{"role": "user", "content": "test"}],
-            stream=False
-        )
-        if test_response:
-            print("API client initialized successfully")
-            return client
+        return client
     except Exception as e:
         print(f"Error initializing ZhipuAI client: {e}")
         traceback.print_exc()
