@@ -1,4 +1,3 @@
-# api/chat.py
 from zhipuai import ZhipuAI
 import json
 import os
@@ -18,26 +17,10 @@ def handle_cors_headers():
         "Content-Type": "application/json"
     }
 
-async def handler(request):
+def handler(request):
     """
     Vercel serverless function handler
     """
-    # 获取请求方法
-    if request.get('method', '').upper() == 'OPTIONS':
-        return {
-            "statusCode": 200,
-            "headers": handle_cors_headers(),
-            "body": ""
-        }
-
-    # 只处理 POST 请求
-    if request.get('method', '').upper() != 'POST':
-        return {
-            "statusCode": 405,
-            "headers": handle_cors_headers(),
-            "body": json.dumps({"error": "Method Not Allowed"})
-        }
-
     try:
         # 解析请求体
         body = json.loads(request.get('body', '{}'))
@@ -85,4 +68,4 @@ async def handler(request):
             "statusCode": 500,
             "headers": handle_cors_headers(),
             "body": json.dumps({"error": str(e)})
-        }
+        } 
