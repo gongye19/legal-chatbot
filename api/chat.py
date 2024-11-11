@@ -4,15 +4,23 @@ import os
 import traceback
 
 ZHIPUAI_API_KEY = os.environ.get("ZHIPUAI_API_KEY")
-if not ZHIPUAI_API_KEY:
-    print("Warning: ZHIPUAI_API_KEY is not set")
 
-client = ZhipuAI(api_key=ZHIPUAI_API_KEY) if ZHIPUAI_API_KEY else None
-system_prompt = '''You are a helpful assistant in the field of law. You are designed to provide advice and assistance to users on legal matters.'''
+def init_client():
+    if not ZHIPUAI_API_KEY:
+        print("Error: ZHIPUAI_API_KEY environment variable is not set")
+        return None
+    try:
+        return ZhipuAI(api_key=ZHIPUAI_API_KEY)
+    except Exception as e:
+        print(f"Error initializing ZhipuAI client: {e}")
+        return None
+
+client = init_client()
+system_prompt = '''You are a helpful assistant in the field of law. You are designed to provide advice and assistance on legal matters.'''
 
 def handler(request):
     try:
-        print("Received request:", request)
+        print(f"Handling request with method: {request.get('method')}")
         
         # 处理 OPTIONS 请求
         if request.get('method') == 'OPTIONS':
@@ -26,24 +34,71 @@ def handler(request):
                 }
             }
 
+        # 验证 API 密钥
         if not ZHIPUAI_API_KEY:
-            raise ValueError("ZHIPUAI_API_KEY is not set in environment variables")
+            print("API key is missing")
+            return {
+                "statusCode": 401,
+                "headers": {
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json"
+                },
+                "body": json.dumps({
+                    "error": "API key is not configured",
+                    "details": "Please set ZHIPUAI_API_KEY environment variable"
+                })
+            }
 
+        # 验证客户端初始化
         if not client:
-            raise ValueError("ZhipuAI client is not initialized")
+            print("Client initialization failed")
+            return {
+                "statusCode": 500,
+                "headers": {
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json"
+                },
+                "body": json.dumps({
+                    "error": "Failed to initialize API client",
+                    "details": "Check API key configuration"
+                })
+            }
 
         # 解析请求体
         body = request.get('body', '{}')
-        print("Request body:", body)
+        print(f"Request body: {body}")
         
-        data = json.loads(body)
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error: {e}")
+            return {
+                "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json"
+                },
+                "body": json.dumps({
+                    "error": "Invalid JSON in request body",
+                    "details": str(e)
+                })
+            }
+
         query = data.get('message')
-        history = data.get('history', [])
-
         if not query:
-            raise ValueError("No message provided in request")
+            return {
+                "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json"
+                },
+                "body": json.dumps({
+                    "error": "No message provided",
+                    "details": "The 'message' field is required"
+                })
+            }
 
-        # 构建消息历史
+        history = data.get('history', [])
         messages = [{"role": "system", "content": system_prompt}]
         recent_history = history[-4:]
         
@@ -55,39 +110,46 @@ def handler(request):
                 })
 
         messages.append({"role": "user", "content": query})
-        print("Prepared messages:", messages)
+        print(f"Sending messages to API: {messages}")
 
-        # 调用 API
-        response = client.chat.completions.create(
-            model="glm-4",
-            messages=messages,
-            stream=False,
-            timeout=25
-        )
+        try:
+            response = client.chat.completions.create(
+                model="glm-4",
+                messages=messages,
+                stream=False,
+                timeout=25
+            )
+            answer = response.choices[0].message.content
+            print(f"Received response: {answer[:100]}...")  # 只打印前100个字符
 
-        answer = response.choices[0].message.content
-        print("Got response:", answer)
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type",
+                    "Content-Type": "application/json"
+                },
+                "body": json.dumps({"response": answer})
+            }
 
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type",
-                "Content-Type": "application/json"
-            },
-            "body": json.dumps({"response": answer})
-        }
+        except Exception as api_error:
+            print(f"API call error: {api_error}")
+            return {
+                "statusCode": 500,
+                "headers": {
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json"
+                },
+                "body": json.dumps({
+                    "error": "API call failed",
+                    "details": str(api_error)
+                })
+            }
 
     except Exception as e:
-        print("Error occurred:", str(e))
-        print("Traceback:")
+        print(f"Unexpected error: {e}")
         traceback.print_exc()
-        
-        error_message = f"Server error: {str(e)}"
-        if "ZHIPUAI_API_KEY" in str(e):
-            error_message = "API key not configured properly"
-
         return {
             "statusCode": 500,
             "headers": {
@@ -95,7 +157,7 @@ def handler(request):
                 "Content-Type": "application/json"
             },
             "body": json.dumps({
-                "error": error_message,
-                "details": traceback.format_exc()
+                "error": "Internal server error",
+                "details": str(e)
             })
         }
