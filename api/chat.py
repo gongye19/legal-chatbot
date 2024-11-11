@@ -2,78 +2,93 @@ from http.server import BaseHTTPRequestHandler
 from zhipuai import ZhipuAI
 import json
 import os
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 ZHIPUAI_API_KEY = os.environ.get("ZHIPUAI_API_KEY")
 if not ZHIPUAI_API_KEY:
     raise ValueError("ZHIPUAI_API_KEY environment variable is not set")
 
 client = ZhipuAI(api_key=ZHIPUAI_API_KEY)
-system_prompt = '''You are a helpful assistant in the field of law. You are designed to provide advice and assistance to users on legal matters. Please provide concise and clear responses.'''
+system_prompt = '''You are a helpful assistant in the field of law. You are designed to provide advice and assistance to users on legal matters.'''
 
-class handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length)
-        data = json.loads(post_data.decode('utf-8'))
-        query = data.get('message')
+# 创建线程池
+executor = ThreadPoolExecutor(max_workers=4)
 
-        if not query:
-            self._send_error(400, "No message provided")
-            return
+async def call_api(messages):
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    response = await loop.run_in_executor(
+        executor,
+        lambda: client.chat.completions.create(
+            model="glm-4",
+            messages=messages,
+            stream=False
+        )
+    )
+    return response
 
-        try:
-            # 限制输入长度
-            if len(query) > 500:
-                self._send_error(400, "Query too long. Please limit to 500 characters.")
-                return
+def handler(request):
+    if request.get('method') == 'OPTIONS':
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Content-Type": "application/json"
+            }
+        }
 
-            # 设置较短的超时时间
-            response = client.chat.completions.create(
-                model="glm-4",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": query},
-                ],
-                stream=False,
-                timeout=10,  # 设置10秒超时
-                max_tokens=500  # 限制响应长度
-            )
+    try:
+        # 解析请求体
+        body = json.loads(request.get('body', '{}'))
+        query = body.get('message')
+        history = body.get('history', [])
 
-            answer = response.choices[0].message.content
-            self._send_response({"response": answer})
+        # 构建消息历史
+        messages = [{"role": "system", "content": system_prompt}]
+        recent_history = history[-10:]
+        
+        for msg in recent_history:
+            if msg.get('isComplete', True):
+                messages.append({
+                    "role": "user" if msg["sender"] == "user" else "assistant",
+                    "content": msg["text"]
+                })
 
-        except Exception as e:
-            print(f"Error: {str(e)}")
-            self._send_error(500, str(e))
+        messages.append({"role": "user", "content": query})
 
-    def do_OPTIONS(self):
-        self._send_cors_headers()
-        self.send_response(200)
-        self.end_headers()
+        # 调用 API
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        response = loop.run_until_complete(call_api(messages))
+        loop.close()
 
-    def _send_response(self, data):
-        self.send_response(200)
-        self._send_cors_headers()
-        self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
+        answer = response.choices[0].message.content
 
-    def _send_error(self, status_code, message):
-        self.send_response(status_code)
-        self._send_cors_headers()
-        self.end_headers()
-        self.wfile.write(json.dumps({"error": message}).encode())
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Content-Type": "application/json"
+            },
+            "body": json.dumps({"response": answer})
+        }
 
-    def _send_cors_headers(self):
-        self.send_header('Content-type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-
-def main(req, res):
-    if req.method == 'OPTIONS':
-        handler().do_OPTIONS()
-    elif req.method == 'POST':
-        handler().do_POST()
-    else:
-        res.status = 405
-        res.body = "Method Not Allowed"
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return {
+            "statusCode": 500,
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            },
+            "body": json.dumps({"error": str(e)})
+        }

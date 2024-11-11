@@ -2,10 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import './ChatBot.css';
 
 const ChatBot = () => {
-  const [messages, setMessages] = useState(() => {
-    const savedMessages = localStorage.getItem('chatHistory');
-    return savedMessages ? JSON.parse(savedMessages) : [];
-  });
+  const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentResponse, setCurrentResponse] = useState('');
@@ -66,7 +63,6 @@ const ChatBot = () => {
     setMessages([]);
     setCurrentResponse('');
     setInputMessage('');
-    localStorage.removeItem('chatHistory');
     focusInput();
   };
 
@@ -76,27 +72,25 @@ const ChatBot = () => {
 
     const userMessage = {
       text: inputMessage,
-      sender: 'user',
-      timestamp: new Date().toISOString()
+      sender: 'user'
     };
     
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
-    setCurrentResponse('');
-
-    setTimeout(focusInput, 0);
-    setTimeout(scrollToBottom, 100);
 
     try {
+      console.log('Sending request with history:', messages);
+      
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         body: JSON.stringify({ 
           message: inputMessage,
-          history: messages.filter(msg => msg.isComplete !== false)
+          history: messages
         }),
       });
 
@@ -105,29 +99,33 @@ const ChatBot = () => {
       }
 
       const data = await response.json();
+      console.log('Received response:', data);
       
-      await simulateTyping(data.response);
+      setMessages(prev => [...prev, {
+        text: data.response,
+        sender: 'bot',
+        isComplete: true
+      }]);
 
     } catch (error) {
-      console.error('Error:', error);
-      const errorMessage = {
-        text: `Error: ${error.message}`,
+      console.error('Detailed error:', {
+        message: error.message,
+        stack: error.stack,
+        type: error.name
+      });
+      setMessages(prev => [...prev, {
+        text: `Error: ${error.message}\nPlease check browser console for details.`,
         sender: 'bot'
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      }]);
     } finally {
       setIsLoading(false);
-      setTimeout(focusInput, 0);
+      focusInput();
     }
   };
 
   useEffect(() => {
     focusInput();
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem('chatHistory', JSON.stringify(messages));
-  }, [messages]);
 
   return (
     <div className="chatbot-container" onClick={(e) => e.stopPropagation()}>
