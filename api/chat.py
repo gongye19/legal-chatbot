@@ -3,37 +3,50 @@ import json
 import os
 import traceback
 
+# 获取 API 密钥
 ZHIPUAI_API_KEY = os.environ.get("ZHIPUAI_API_KEY")
 
+# 初始化客户端
 def init_client():
-    if not ZHIPUAI_API_KEY:
-        print("Error: ZHIPUAI_API_KEY environment variable is not set")
-        return None
     try:
-        return ZhipuAI(api_key=ZHIPUAI_API_KEY)
+        if not ZHIPUAI_API_KEY:
+            print("Error: ZHIPUAI_API_KEY environment variable is not set")
+            return None
+        client = ZhipuAI(api_key=ZHIPUAI_API_KEY)
+        # 测试客户端是否正常工作
+        test_response = client.chat.completions.create(
+            model="glm-4",
+            messages=[{"role": "user", "content": "test"}],
+            stream=False
+        )
+        if test_response:
+            print("API client initialized successfully")
+            return client
     except Exception as e:
         print(f"Error initializing ZhipuAI client: {e}")
-        return None
+        traceback.print_exc()
+    return None
 
 client = init_client()
 system_prompt = '''You are a helpful assistant in the field of law. You are designed to provide advice and assistance on legal matters.'''
 
 def handler(request):
-    try:
-        print(f"Handling request with method: {request.get('method')}")
-        
-        # 处理 OPTIONS 请求
-        if request.get('method') == 'OPTIONS':
-            return {
-                "statusCode": 200,
-                "headers": {
-                    "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Methods": "POST, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type",
-                    "Content-Type": "application/json"
-                }
+    # 打印环境变量（不包含敏感信息）
+    print("Environment variables:", {k: '***' if 'KEY' in k else v for k, v in os.environ.items()})
+    
+    # 处理 OPTIONS 请求
+    if request.get('method') == 'OPTIONS':
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Content-Type": "application/json"
             }
+        }
 
+    try:
         # 验证 API 密钥
         if not ZHIPUAI_API_KEY:
             print("API key is missing")
@@ -45,7 +58,7 @@ def handler(request):
                 },
                 "body": json.dumps({
                     "error": "API key is not configured",
-                    "details": "Please set ZHIPUAI_API_KEY environment variable"
+                    "details": "Please check environment variables configuration"
                 })
             }
 
@@ -60,7 +73,7 @@ def handler(request):
                 },
                 "body": json.dumps({
                     "error": "Failed to initialize API client",
-                    "details": "Check API key configuration"
+                    "details": "Please check server logs for details"
                 })
             }
 
@@ -120,7 +133,7 @@ def handler(request):
                 timeout=25
             )
             answer = response.choices[0].message.content
-            print(f"Received response: {answer[:100]}...")  # 只打印前100个字符
+            print(f"Received response: {answer[:100]}...")
 
             return {
                 "statusCode": 200,
@@ -135,6 +148,7 @@ def handler(request):
 
         except Exception as api_error:
             print(f"API call error: {api_error}")
+            traceback.print_exc()
             return {
                 "statusCode": 500,
                 "headers": {
