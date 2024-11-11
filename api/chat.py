@@ -16,7 +16,6 @@ class handler(BaseHTTPRequestHandler):
         post_data = self.rfile.read(content_length)
         data = json.loads(post_data.decode('utf-8'))
         query = data.get('message')
-        history = data.get('history', [])
 
         if not query:
             self.send_response(400)
@@ -26,22 +25,12 @@ class handler(BaseHTTPRequestHandler):
             return
 
         try:
-            # 构建消息历史
-            messages = [{"role": "system", "content": system_prompt}]
-            recent_history = history[-10:]
-            
-            for msg in recent_history:
-                if msg.get('isComplete', True):
-                    messages.append({
-                        "role": "user" if msg["sender"] == "user" else "assistant",
-                        "content": msg["text"]
-                    })
-
-            messages.append({"role": "user", "content": query})
-
             response = client.chat.completions.create(
                 model="glm-4",
-                messages=messages,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": query},
+                ],
                 stream=False
             )
 
