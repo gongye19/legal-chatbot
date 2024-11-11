@@ -1,3 +1,4 @@
+from http.server import BaseHTTPRequestHandler
 from zhipuai import ZhipuAI
 import json
 import os
@@ -9,63 +10,57 @@ if not ZHIPUAI_API_KEY:
 client = ZhipuAI(api_key=ZHIPUAI_API_KEY)
 system_prompt = '''You are a helpful assistant in the field of law. You are designed to provide advice and assistance to users on legal matters.'''
 
-def handle_cors_headers():
-    return {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-        "Content-Type": "application/json"
-    }
-
-def handler(request):
-    """
-    Vercel serverless function handler
-    """
-    try:
-        # 解析请求体
-        body = json.loads(request.get('body', '{}'))
-        query = body.get('message')
-        history = body.get('history', [])
+class handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
+        data = json.loads(post_data.decode('utf-8'))
+        query = data.get('message')
+        history = data.get('history', [])
 
         if not query:
-            return {
-                "statusCode": 400,
-                "headers": handle_cors_headers(),
-                "body": json.dumps({"error": "No message provided"})
-            }
+            self.send_response(400)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "No message provided"}).encode())
+            return
 
-        # 构建消息历史
-        messages = [{"role": "system", "content": system_prompt}]
-        recent_history = history[-10:]
-        
-        for msg in recent_history:
-            if msg.get('isComplete', True):
-                messages.append({
-                    "role": "user" if msg["sender"] == "user" else "assistant",
-                    "content": msg["text"]
-                })
+        try:
+            # 构建消息历史
+            messages = [{"role": "system", "content": system_prompt}]
+            recent_history = history[-10:]
+            
+            for msg in recent_history:
+                if msg.get('isComplete', True):
+                    messages.append({
+                        "role": "user" if msg["sender"] == "user" else "assistant",
+                        "content": msg["text"]
+                    })
 
-        messages.append({"role": "user", "content": query})
+            messages.append({"role": "user", "content": query})
 
-        # 调用 API
-        response = client.chat.completions.create(
-            model="glm-4",
-            messages=messages,
-            stream=False
-        )
+            response = client.chat.completions.create(
+                model="glm-4",
+                messages=messages,
+                stream=False
+            )
 
-        answer = response.choices[0].message.content
+            answer = response.choices[0].message.content
 
-        return {
-            "statusCode": 200,
-            "headers": handle_cors_headers(),
-            "body": json.dumps({"response": answer})
-        }
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({"response": answer}).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
 
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        return {
-            "statusCode": 500,
-            "headers": handle_cors_headers(),
-            "body": json.dumps({"error": str(e)})
-        } 
+def main(req, res):
+    if req.method == 'POST':
+        handler().do_POST()
+    else:
+        res.status = 405
+        res.body = "Method Not Allowed"
