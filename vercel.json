@@ -2,7 +2,7 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/**/*.py",
+      "src": "api/chat.py",
       "use": "@vercel/python"
     },
     {
@@ -13,25 +13,12 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "api/$1.py",
-      "headers": {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type"
-      }
+      "src": "/api/chat",
+      "dest": "api/chat.py"
     },
     {
       "src": "/(.*)",
       "dest": "build/$1"
     }
-  ],
-  "env": {
-    "PYTHONUNBUFFERED": "1"
-  },
-  "functions": {
-    "api/**/*.py": {
-      "maxDuration": 30
-    }
-  }
+  ]
 } 

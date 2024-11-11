@@ -11,13 +11,6 @@ client = ZhipuAI(api_key=ZHIPUAI_API_KEY)
 system_prompt = '''You are a helpful assistant in the field of law. You are designed to provide advice and assistance to users on legal matters.'''
 
 class handler(BaseHTTPRequestHandler):
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
-        
     def do_POST(self):
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
@@ -26,7 +19,10 @@ class handler(BaseHTTPRequestHandler):
         history = data.get('history', [])
 
         if not query:
-            self._send_error(400, "No message provided")
+            self.send_response(400)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "No message provided"}).encode())
             return
 
         try:
@@ -43,48 +39,28 @@ class handler(BaseHTTPRequestHandler):
 
             messages.append({"role": "user", "content": query})
 
-            # 设置超时时间
             response = client.chat.completions.create(
                 model="glm-4",
                 messages=messages,
-                stream=False,
-                timeout=60  # 设置25秒超时
+                stream=False
             )
 
             answer = response.choices[0].message.content
-            self._send_response({"response": answer})
 
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({"response": answer}).encode())
         except Exception as e:
-            print(f"Error in handler: {str(e)}")  # 添加错误日志
-            self._send_error(500, str(e))
-
-    def _send_response(self, data):
-        self.send_response(200)
-        self._send_headers()
-        self.wfile.write(json.dumps(data).encode())
-
-    def _send_error(self, status_code, message):
-        self.send_response(status_code)
-        self._send_headers()
-        self.wfile.write(json.dumps({"error": message}).encode())
-
-    def _send_headers(self):
-        self.send_header('Content-type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
 
 def main(req, res):
-    try:
-        if req.method == 'OPTIONS':
-            handler().do_OPTIONS()
-        elif req.method == 'POST':
-            handler().do_POST()
-        else:
-            res.status = 405
-            res.body = "Method Not Allowed"
-    except Exception as e:
-        print(f"Error in main: {str(e)}")  # 添加错误日志
-        res.status = 500
-        res.body = str(e)
+    if req.method == 'POST':
+        handler().do_POST()
+    else:
+        res.status = 405
+        res.body = "Method Not Allowed"
