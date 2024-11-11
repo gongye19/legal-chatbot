@@ -48,7 +48,7 @@ class handler(BaseHTTPRequestHandler):
                 model="glm-4",
                 messages=messages,
                 stream=False,
-                timeout=25  # 设置25秒超时
+                timeout=60  # 设置25秒超时
             )
 
             answer = response.choices[0].message.content
