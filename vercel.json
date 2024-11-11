@@ -3,7 +3,11 @@
   "builds": [
     {
       "src": "api/chat.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 300,
+        "memory": 3008
+      }
     },
     {
       "src": "package.json",
@@ -14,11 +18,23 @@
   "routes": [
     {
       "src": "/api/chat",
-      "dest": "api/chat.py"
+      "dest": "api/chat.py",
+      "methods": ["POST", "OPTIONS"],
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type"
+      }
     },
     {
       "src": "/(.*)",
       "dest": "build/$1"
     }
-  ]
+  ],
+  "functions": {
+    "api/chat.py": {
+      "maxDuration": 300,
+      "memory": 3008
+    }
+  }
 } 
