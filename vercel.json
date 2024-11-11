@@ -13,12 +13,16 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
+      "src": "/api/chat",
+      "methods": ["POST", "OPTIONS"],
       "dest": "chat.py"
     },
     {
       "src": "/(.*)",
       "dest": "build/$1"
     }
-  ]
+  ],
+  "env": {
+    "PYTHONUNBUFFERED": "1"
+  }
 } 

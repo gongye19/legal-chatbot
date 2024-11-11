@@ -20,10 +20,15 @@ def handle_request(request_body):
         if not query:
             return {
                 "statusCode": 400,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "Content-Type",
+                    "Access-Control-Allow-Methods": "POST, OPTIONS"
+                },
                 "body": json.dumps({"error": "No message provided"})
             }
 
-        # 构建完整的消息历史
         messages = [{"role": "system", "content": system_prompt}]
         recent_history = history[-10:]
         
@@ -39,37 +44,66 @@ def handle_request(request_body):
         response = client.chat.completions.create(
             model="glm-4",
             messages=messages,
-            stream=False  # Vercel 函数需要使用非流式响应
+            stream=False
         )
 
         answer = response.choices[0].message.content
 
         return {
             "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Allow-Methods": "POST, OPTIONS"
+            },
             "body": json.dumps({"response": answer})
         }
 
     except Exception as e:
+        print(f"Error: {str(e)}")
         return {
             "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Allow-Methods": "POST, OPTIONS"
+            },
             "body": json.dumps({"error": str(e)})
         }
 
-def handler(event, context):
-    if event.get('httpMethod') == 'OPTIONS':
+def handler(request):
+    if request.get('method') == 'OPTIONS':
         return {
             "statusCode": 200,
             "headers": {
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "POST, OPTIONS",
                 "Access-Control-Allow-Headers": "Content-Type"
-            }
+            },
+            "body": ""
         }
     
-    if event.get('httpMethod') != 'POST':
+    if request.get('method') != 'POST':
         return {
             "statusCode": 405,
-            "body": "Method Not Allowed"
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
+            "body": json.dumps({"error": "Method Not Allowed"})
         }
 
-    return handle_request(event.get('body', ''))
+    try:
+        return handle_request(request.get('body', ''))
+    except Exception as e:
+        print(f"Handler Error: {str(e)}")
+        return {
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
+            "body": json.dumps({"error": str(e)})
+        }
