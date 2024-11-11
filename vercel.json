@@ -6,7 +6,7 @@
       "use": "@vercel/python",
       "config": {
         "maxDuration": 60,
-        "runtime": "python3.10"
+        "runtime": "python3.9"
       }
     },
     {
@@ -18,15 +18,17 @@
   "routes": [
     {
       "src": "/api/chat",
-      "dest": "/api/chat.py",
+      "dest": "api/chat.py",
       "methods": ["POST", "OPTIONS"]
     },
     {
       "src": "/(.*)",
-      "dest": "/build/$1"
+      "dest": "build/$1"
     }
   ],
-  "env": {
-    "PYTHONUNBUFFERED": "1"
+  "functions": {
+    "api/chat.py": {
+      "maxDuration": 60
+    }
   }
 } 
